@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediBot - Analyze Image</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-[#1e1e2e] to-[#2e2e48] text-gray-200 font-sans">
+    <div class="container mx-auto p-6">
+        <div class="flex flex-col items-center text-center mb-12">
+            <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 drop-shadow-lg">AI-DOCTOR</h1>
+            <p class="text-lg text-gray-400 mt-2">Medical Chatbot - Analyze Image Application</p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div id="upload-section" class="bg-white/10 backdrop-blur-lg p-6 rounded-2xl shadow-xl border border-white/20">
+                <h2 class="text-2xl font-semibold text-purple-300 mb-4">📤 Upload Image</h2>
+                <label id="upload-box" class="block cursor-pointer text-center border-2 border-dashed border-gray-400 p-6 rounded-lg hover:bg-gray-800/40 transition">
+                    <input type="file" id="image-upload" accept="image/*" class="hidden" />
+                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-300"></i>
+                    <p class="mt-2 text-gray-300">Click to Upload</p>
+                </label>
+                <div id="image-container" class="hidden mt-4">
+                    <img id="display-image" src="" alt="Uploaded" class="w-full rounded-lg shadow-lg border border-gray-700" />
+                    <button id="delete-image" class="mt-4 py-2 px-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition-all shadow-lg">🗑️ Delete Image</button>
+                </div>
+            </div>
+            
+            <div class="bg-white/10 backdrop-blur-lg p-6 rounded-2xl shadow-xl border border-white/20">
+                <h2 class="text-2xl font-semibold text-blue-300 mb-4">💬 Ask a Question</h2>
+                <textarea id="query-input" rows="4" placeholder="Enter your question..."
+                    class="w-full p-4 bg-gray-800 text-gray-200 rounded-lg shadow-lg border border-gray-600"></textarea>
+                <button id="submit-query" class="w-full mt-4 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition-all shadow-lg">
+                    🚀 Submit Query
+                </button>
+            </div>
+        </div>
+        
+        <div id="chat-history" class="mt-10 p-6 bg-white/10 backdrop-blur-lg rounded-2xl shadow-xl border border-white/20 hidden">
+            <h2 class="text-2xl font-semibold text-yellow-300 mb-4">📝 Chat History</h2>
+            <div id="history-container" class="space-y-4"></div>
+        </div>
+        
+        <div id="error-container" class="hidden mt-8 p-4 bg-red-500 text-white rounded-lg shadow-lg">
+            <p id="error-text"></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const imageUpload = document.getElementById('image-upload');
+            const displayImage = document.getElementById('display-image');
+            const imageContainer = document.getElementById('image-container');
+            const uploadBox = document.getElementById('upload-box');
+            const deleteImage = document.getElementById('delete-image');
+            const queryInput = document.getElementById('query-input');
+            const submitQuery = document.getElementById('submit-query');
+            const chatHistory = document.getElementById('chat-history');
+            const historyContainer = document.getElementById('history-container');
+            const errorContainer = document.getElementById('error-container');
+            const errorText = document.getElementById('error-text');
+
+            imageUpload.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        displayImage.src = e.target.result;
+                        imageContainer.classList.remove('hidden');
+                        uploadBox.classList.add('hidden');
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            deleteImage.addEventListener('click', () => {
+                displayImage.src = "";
+                imageUpload.value = "";
+                imageContainer.classList.add('hidden');
+                uploadBox.classList.remove('hidden');
+            });
+            
+            submitQuery.addEventListener('click', async () => {
+                const image = imageUpload.files[0];
+                const query = queryInput.value.trim();
+                if (!image || !query) {
+                    showError('⚠️ Please upload an image and enter a query.');
+                    return;
+                }
+                const formData = new FormData();
+                formData.append('image', image);
+                formData.append('query', query);
+                try {
+                    submitQuery.disabled = true;
+                    submitQuery.textContent = 'Processing... ⏳';
+                    const response = await fetch('/upload_and_query', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (!response.ok) {
+                        throw new Error(result.detail || 'An error occurred.');
+                    }
+                    addToChatHistory(query, result.explanation, result.medications);
+                    errorContainer.classList.add('hidden');
+                } catch (error) {
+                    showError(error.message);
+                } finally {
+                    submitQuery.disabled = false;
+                    submitQuery.textContent = '🚀 Submit Query';
+                }
+            });
+            
+            function showError(message) {
+                errorText.textContent = message;
+                errorContainer.classList.remove('hidden');
+            }
+
+            function addToChatHistory(query, explanation, medications) {
+                const entry = document.createElement('div');
+                entry.classList.add('p-4', 'bg-gray-800', 'text-gray-300', 'rounded-lg', 'shadow-lg');
+                entry.innerHTML = `<strong>📝 Query:</strong> ${query}<br><strong>🤖 Explanation:</strong> ${marked.parse(explanation)}<br><strong>💊 Medications:</strong> ${marked.parse(medications)}`;
+                historyContainer.prepend(entry);
+                chatHistory.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
